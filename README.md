@@ -1,5 +1,7 @@
 # Krun - QueueRun
 
+[![Build Krun](https://github.com/falmar/krun/actions/workflows/build.yaml/badge.svg)](https://github.com/falmar/krun/actions/workflows/build.yaml)
+
 Krun is a simple worker queue, which provides an easy way to manage and execute jobs concurrently. It can wait for all jobs to finish, and get the results from the executed jobs. The package can be found at [github.com/falmar/krun](https://github.com/falmar/krun).
 
 ## Installation
