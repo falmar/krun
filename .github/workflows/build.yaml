@@ -1,12 +1,14 @@
-name: build
+name: Build Krun
 
 on:
   push:
-    - master
-    - dev
-  # pull_request:
-  #   branches:
-  #     - master
+    branches:
+      - master
+      - dev
+  pull_request:
+    branches:
+      - master
+      - dev
 
 jobs:
   build:
