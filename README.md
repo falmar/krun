@@ -1,5 +1,7 @@
 # Krun - QueueRun
 
+[![Build Krun](https://github.com/falmar/krun/actions/workflows/build.yaml/badge.svg)](https://github.com/falmar/krun/actions/workflows/build.yaml)
+
 Krun is a simple worker queue, which provides an easy way to manage and execute jobs concurrently. It can wait for all jobs to finish, and get the results from the executed jobs. The package can be found at [github.com/falmar/krun](https://github.com/falmar/krun).
 
 ## Installation
@@ -21,16 +23,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/falmar/krun"
+	"os"
 	"time"
 )
 
 func main() {
-	cfg := krun.NewWorkerQueueConfig{
+	queue := krun.New(krun.NewConfig{
 		Size:      5, // number of workers
 		WaitSleep: time.Millisecond * 10,
-	}
-
-	queue := krun.NewWorkerQueue(cfg)
+	})
 
 	job := func(ctx context.Context) (interface{}, error) {
 		time.Sleep(time.Millisecond * 100)
@@ -43,9 +44,10 @@ func main() {
 	res := <-resChan
 	if res.Error != nil {
 		fmt.Println("Error:", res.Error)
-	} else {
-		fmt.Println("Result:", res.Data)
+		os.Exit(1)
 	}
+
+	fmt.Println("Result:", res.Data)
 }
 ```
 
