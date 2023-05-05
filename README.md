@@ -23,16 +23,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/falmar/krun"
+	"os"
 	"time"
 )
 
 func main() {
-	cfg := krun.NewWorkerQueueConfig{
+	queue := krun.New(krun.NewConfig{
 		Size:      5, // number of workers
 		WaitSleep: time.Millisecond * 10,
-	}
-
-	queue := krun.NewWorkerQueue(cfg)
+	})
 
 	job := func(ctx context.Context) (interface{}, error) {
 		time.Sleep(time.Millisecond * 100)
@@ -45,9 +44,10 @@ func main() {
 	res := <-resChan
 	if res.Error != nil {
 		fmt.Println("Error:", res.Error)
-	} else {
-		fmt.Println("Result:", res.Data)
+		os.Exit(1)
 	}
+
+	fmt.Println("Result:", res.Data)
 }
 ```
 
