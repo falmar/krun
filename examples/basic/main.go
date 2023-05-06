@@ -21,12 +21,11 @@ func main() {
 
 		r := k.Run(ctx, func(ctx context.Context) (interface{}, error) {
 			// do some work
-
+			time.Sleep(time.Millisecond * (300 + time.Duration(random.Intn(700))))
 			return ctx.Value("key"), nil
 		})
 
 		go func(r <-chan *krun.Result) {
-			time.Sleep(time.Millisecond * (300 + time.Duration(random.Intn(700))))
 			fmt.Println("hello from index:", (<-r).Data)
 		}(r)
 	}
