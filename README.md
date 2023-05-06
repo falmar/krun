@@ -54,3 +54,8 @@ func main() {
 ## License
 
 Krun is released under the MIT License. See [LICENSE](LICENSE) for more information.
+
+
+## TODO:
+- [ ] unit test
+- [ ] go releaser
