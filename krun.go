@@ -72,6 +72,7 @@ func (k *krun) Run(ctx context.Context, f Job) <-chan *Result {
 }
 
 func (k *krun) Wait(ctx context.Context) {
+breakL:
 	for {
 		select {
 		case <-ctx.Done():
@@ -83,7 +84,7 @@ func (k *krun) Wait(ctx context.Context) {
 				continue
 			}
 
-			break
+			break breakL
 		}
 	}
 }
