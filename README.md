@@ -22,15 +22,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/falmar/krun"
 	"os"
 	"time"
+
+	"github.com/falmar/krun"
 )
 
 func main() {
-	queue := krun.New(krun.NewConfig{
+	queue := krun.New(&krun.Config{
 		Size:      5, // number of workers
-		WaitSleep: time.Millisecond * 10,
+		WaitSleep: time.Microsecond,
 	})
 
 	job := func(ctx context.Context) (interface{}, error) {
@@ -47,7 +48,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Result:", res.Data)
+	queue.Wait(ctx)
+
+	fmt.Println("Result:", res.Data.(string))
 }
 ```
 
@@ -57,5 +60,5 @@ Krun is released under the MIT License. See [LICENSE](LICENSE) for more informat
 
 
 ## TODO:
-- [ ] unit test
+- [x] unit test
 - [ ] go releaser

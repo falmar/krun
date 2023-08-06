@@ -22,21 +22,19 @@ type krun struct {
 	n         int
 	waitSleep time.Duration
 	workers   chan *worker
-	working   int
 	mu        sync.RWMutex
 }
 type worker struct {
-	ctx    context.Context
 	job    Job
 	result chan *Result
 }
 
-type NewConfig struct {
+type Config struct {
 	Size      int
 	WaitSleep time.Duration
 }
 
-func New(cfg NewConfig) Krun {
+func New(cfg *Config) Krun {
 	k := &krun{
 		n:         cfg.Size,
 		workers:   make(chan *worker, cfg.Size),
@@ -72,19 +70,25 @@ func (k *krun) Run(ctx context.Context, f Job) <-chan *Result {
 }
 
 func (k *krun) Wait(ctx context.Context) {
-breakL:
+	k.mu.RLock()
+	n := k.n
+	k.mu.RUnlock()
+
+	if k.len() == n {
+		return
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		default:
+		case <-time.After(k.waitSleep):
 			// "wait" until all workers are back
-			if k.len() < k.n {
-				time.Sleep(k.waitSleep)
+			if k.len() < n {
 				continue
 			}
 
-			break breakL
+			return
 		}
 	}
 }
@@ -105,8 +109,7 @@ func (k *krun) push(w *worker) {
 }
 
 func (k *krun) pop() *worker {
-	w := <-k.workers
-	return w
+	return <-k.workers
 }
 
 func (k *krun) len() int {

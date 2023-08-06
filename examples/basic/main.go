@@ -3,32 +3,33 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"os"
 	"time"
 
 	"github.com/falmar/krun"
 )
 
 func main() {
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
-	ctx := context.Background()
-	k := krun.New(krun.NewConfig{
-		Size: 10,
+	queue := krun.New(&krun.Config{
+		Size:      5, // number of workers
+		WaitSleep: time.Microsecond,
 	})
 
-	for i := 0; i < 100; i++ {
-		ctx := context.WithValue(ctx, "key", i)
-
-		r := k.Run(ctx, func(ctx context.Context) (interface{}, error) {
-			// do some work
-			time.Sleep(time.Millisecond * (300 + time.Duration(random.Intn(700))))
-			return ctx.Value("key"), nil
-		})
-
-		go func(r <-chan *krun.Result) {
-			fmt.Println("hello from index:", (<-r).Data)
-		}(r)
+	job := func(ctx context.Context) (interface{}, error) {
+		time.Sleep(time.Millisecond * 100)
+		return "Hello, Krun!", nil
 	}
 
-	k.Wait(context.Background())
+	ctx := context.Background()
+	resChan := queue.Run(ctx, job)
+
+	res := <-resChan
+	if res.Error != nil {
+		fmt.Println("Error:", res.Error)
+		os.Exit(1)
+	}
+
+	queue.Wait(ctx)
+
+	fmt.Println("Result:", res.Data.(string))
 }
