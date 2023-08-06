@@ -22,11 +22,9 @@ type krun struct {
 	n         int
 	waitSleep time.Duration
 	workers   chan *worker
-	working   int
 	mu        sync.RWMutex
 }
 type worker struct {
-	ctx    context.Context
 	job    Job
 	result chan *Result
 }
@@ -105,8 +103,7 @@ func (k *krun) push(w *worker) {
 }
 
 func (k *krun) pop() *worker {
-	w := <-k.workers
-	return w
+	return <-k.workers
 }
 
 func (k *krun) len() int {
