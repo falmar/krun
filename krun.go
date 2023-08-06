@@ -29,12 +29,12 @@ type worker struct {
 	result chan *Result
 }
 
-type NewConfig struct {
+type Config struct {
 	Size      int
 	WaitSleep time.Duration
 }
 
-func New(cfg NewConfig) Krun {
+func New(cfg *Config) Krun {
 	k := &krun{
 		n:         cfg.Size,
 		workers:   make(chan *worker, cfg.Size),

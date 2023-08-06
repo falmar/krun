@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 	t.Parallel()
 
 	t.Run("returns a Krun", func(t *testing.T) {
-		k := New(NewConfig{})
+		k := New(&Config{})
 		if k == nil {
 			t.Errorf("Expected Krun, got nil")
 		}
@@ -24,7 +24,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("returns a Krun with the correct size", func(t *testing.T) {
-		k := New(NewConfig{Size: 5}).(*krun)
+		k := New(&Config{Size: 5}).(*krun)
 
 		if k.n != 5 {
 			t.Errorf("Expected 5, got %v", k.Size())
@@ -36,7 +36,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("returns a Krun with the correct waitSleep", func(t *testing.T) {
-		k := New(NewConfig{WaitSleep: time.Second}).(*krun)
+		k := New(&Config{WaitSleep: time.Second}).(*krun)
 
 		if k.waitSleep != time.Second {
 			t.Errorf("Expected 1s, got %v", k.waitSleep)
