@@ -2,9 +2,13 @@ package krun
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
+
+// ErrPoolClosed it is closed (hahah)
+var ErrPoolClosed = errors.New("pool's closed")
 
 type Result struct {
 	Data  interface{}
@@ -16,13 +20,17 @@ type Krun interface {
 	Run(ctx context.Context, f Job) <-chan *Result
 	Wait(ctx context.Context)
 	Size() int
+	Close() error
 }
 
 type krun struct {
-	n         int
-	waitSleep time.Duration
-	workers   chan *worker
-	mu        sync.RWMutex
+	poolSize int
+	closed   bool
+
+	workers chan *worker
+	mu      sync.RWMutex
+
+	wg sync.WaitGroup
 }
 type worker struct {
 	job    Job
@@ -36,9 +44,12 @@ type Config struct {
 
 func New(cfg *Config) Krun {
 	k := &krun{
-		n:         cfg.Size,
-		workers:   make(chan *worker, cfg.Size),
-		waitSleep: cfg.WaitSleep,
+		poolSize: cfg.Size,
+		closed:   false,
+
+		workers: make(chan *worker, cfg.Size),
+		wg:      sync.WaitGroup{},
+		mu:      sync.RWMutex{},
 	}
 
 	for i := 0; i < cfg.Size; i++ {
@@ -50,7 +61,7 @@ func New(cfg *Config) Krun {
 
 func (k *krun) Size() int {
 	k.mu.RLock()
-	s := k.n
+	s := k.poolSize
 	k.mu.RUnlock()
 	return s
 }
@@ -58,9 +69,10 @@ func (k *krun) Size() int {
 func (k *krun) Run(ctx context.Context, f Job) <-chan *Result {
 	// get worker from the channel
 	w := k.pop()
+	k.wg.Add(1)
 
 	// assign Job to the worker and Run it
-	cr := make(chan *Result)
+	cr := make(chan *Result, 1)
 	w.job = f
 	w.result = cr
 	go k.work(ctx, w)
@@ -70,27 +82,37 @@ func (k *krun) Run(ctx context.Context, f Job) <-chan *Result {
 }
 
 func (k *krun) Wait(ctx context.Context) {
-	k.mu.RLock()
-	n := k.n
-	k.mu.RUnlock()
+	done := make(chan struct{})
 
-	if k.len() == n {
+	go func() {
+		k.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-done:
 		return
 	}
+}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(k.waitSleep):
-			// "wait" until all workers are back
-			if k.len() < n {
-				continue
-			}
-
-			return
-		}
+func (k *krun) Close() error {
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		return ErrPoolClosed
 	}
+	k.closed = true
+	k.mu.Unlock()
+
+	// Wait for all work to complete
+	k.wg.Wait()
+
+	// Close worker channel
+	close(k.workers)
+
+	return nil
 }
 
 func (k *krun) work(ctx context.Context, w *worker) {
@@ -98,11 +120,11 @@ func (k *krun) work(ctx context.Context, w *worker) {
 	d, err := w.job(ctx)
 
 	// send Result into the caller channel
-	// this will block until is read
 	w.result <- &Result{d, err}
 
 	// return worker to Krun
 	k.push(w)
+	k.wg.Done()
 }
 func (k *krun) push(w *worker) {
 	k.workers <- w
@@ -110,12 +132,4 @@ func (k *krun) push(w *worker) {
 
 func (k *krun) pop() *worker {
 	return <-k.workers
-}
-
-func (k *krun) len() int {
-	k.mu.RLock()
-	l := len(k.workers)
-	k.mu.RUnlock()
-
-	return l
 }
