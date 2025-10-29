@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 )
 
 // ErrPoolClosed it is closed (hahah)
@@ -38,8 +37,7 @@ type worker struct {
 }
 
 type Config struct {
-	Size      int
-	WaitSleep time.Duration
+	Size int
 }
 
 func New(cfg *Config) Krun {
