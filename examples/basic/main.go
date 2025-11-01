@@ -11,8 +11,7 @@ import (
 
 func main() {
 	queue := krun.New(&krun.Config{
-		Size:      5, // number of workers
-		WaitSleep: time.Microsecond,
+		Size: 5, // number of workers
 	})
 
 	job := func(ctx context.Context) (interface{}, error) {
