@@ -21,6 +21,36 @@ func TestNew(t *testing.T) {
 			t.Fatalf("Expected *krun, got %T", v)
 		}
 	})
+
+	t.Run("handles nil Config", func(t *testing.T) {
+		k := New(nil)
+		if k == nil {
+			t.Fatalf("Expected Krun, got nil")
+		}
+		if k.Size() != 1 {
+			t.Fatalf("Expected default size 1, got %d", k.Size())
+		}
+	})
+
+	t.Run("handles Size 0", func(t *testing.T) {
+		k := New(&Config{Size: 0})
+		if k == nil {
+			t.Fatalf("Expected Krun, got nil")
+		}
+		if k.Size() != 1 {
+			t.Fatalf("Expected default size 1, got %d", k.Size())
+		}
+	})
+
+	t.Run("handles negative Size", func(t *testing.T) {
+		k := New(&Config{Size: -5})
+		if k == nil {
+			t.Fatalf("Expected Krun, got nil")
+		}
+		if k.Size() != 1 {
+			t.Fatalf("Expected default size 1, got %d", k.Size())
+		}
+	})
 }
 
 func TestKrun_Size(t *testing.T) {
@@ -68,8 +98,6 @@ func TestRun(t *testing.T) {
 			if tp != "my-string" {
 				t.Fatalf("expected \"my-string\", received: %s", tp)
 			}
-
-			break
 		default:
 			t.Fatalf("expected string, got %t", tp)
 		}
@@ -111,7 +139,7 @@ func TestRun(t *testing.T) {
 
 		select {
 		case e := <-errChan:
-			t.Fatalf(e.Error())
+			t.Fatalf("Expected nil, got %v", e)
 		case <-time.After(time.Millisecond):
 			return
 		}
@@ -133,6 +161,96 @@ func TestRun(t *testing.T) {
 			t.Fatalf("Expected nil, got %v", d.Error)
 		} else if d.Data != nil {
 			t.Fatalf("Expected nil, got %v", d.Data)
+		}
+	})
+
+	t.Run("returns error if context already cancelled", func(t *testing.T) {
+		k := New(&Config{Size: 1})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		r := <-k.Run(ctx, func(ctx context.Context) (interface{}, error) {
+			return "should not run", nil
+		})
+
+		if r.Error == nil {
+			t.Fatalf("Expected context cancelled error, got nil")
+		}
+		if r.Error != ctx.Err() {
+			t.Fatalf("Expected context cancelled error, got %v", r.Error)
+		}
+	})
+
+	t.Run("returns error if pool is closed", func(t *testing.T) {
+		k := New(&Config{Size: 1})
+
+		// Close the pool
+		if err := k.Close(); err != nil {
+			t.Fatalf("Expected nil on first close, got %v", err)
+		}
+
+		// Try to run a job after close
+		r := <-k.Run(context.Background(), func(ctx context.Context) (interface{}, error) {
+			return "should not run", nil
+		})
+
+		if r.Error == nil {
+			t.Fatalf("Expected ErrPoolClosed, got nil")
+		}
+		if !errors.Is(r.Error, ErrPoolClosed) {
+			t.Fatalf("Expected ErrPoolClosed, got %v", r.Error)
+		}
+	})
+
+	t.Run("handles Run() after Close() while job waiting", func(t *testing.T) {
+		// t.SkipNow()
+		// return
+		k := New(&Config{Size: 1})
+
+		ctx := context.Background()
+
+		// Start a job that takes time
+		started := make(chan struct{})
+		jobDone := make(chan struct{})
+		_ = k.Run(ctx, func(ctx context.Context) (interface{}, error) {
+			started <- struct{}{}
+			<-jobDone
+			return "done", nil
+		})
+
+		// Wait for job to start
+		<-started
+
+		// Close in another goroutine
+		closeDone := make(chan error)
+		go func() {
+			closeDone <- k.Close()
+		}()
+
+		// Try to run another job while closing
+		r := <-k.Run(ctx, func(ctx context.Context) (interface{}, error) {
+			return "should not run", nil
+		})
+
+		if r.Error == nil {
+			t.Fatalf("Expected ErrPoolClosed, got nil")
+		}
+		if !errors.Is(r.Error, ErrPoolClosed) {
+			t.Fatalf("Expected ErrPoolClosed, got %v", r.Error)
+		}
+
+		// Finish the running job
+		close(jobDone)
+
+		// Wait for close to complete
+		select {
+		case err := <-closeDone:
+			if err != nil {
+				t.Fatalf("Expected nil on close, got %v", err)
+			}
+		case <-time.After(50 * time.Millisecond):
+			t.Fatalf("Close did not complete in time")
 		}
 	})
 }
@@ -294,6 +412,43 @@ func TestKrun_Close(t *testing.T) {
 			}
 		case <-time.After(50 * time.Millisecond):
 			t.Fatalf("Close did not complete in time")
+		}
+	})
+
+	t.Run("concurrent Close() calls", func(t *testing.T) {
+		k := New(&Config{Size: 5})
+
+		results := make(chan error, 10)
+		for i := 0; i < 10; i++ {
+			go func() {
+				results <- k.Close()
+			}()
+		}
+
+		// One should succeed, rest should get ErrPoolClosed
+		successCount := 0
+		errorCount := 0
+
+		for i := 0; i < 10; i++ {
+			select {
+			case err := <-results:
+				if err == nil {
+					successCount++
+				} else if errors.Is(err, ErrPoolClosed) {
+					errorCount++
+				} else {
+					t.Fatalf("Unexpected error: %v", err)
+				}
+			case <-time.After(100 * time.Millisecond):
+				t.Fatalf("Close did not complete in time")
+			}
+		}
+
+		if successCount != 1 {
+			t.Fatalf("Expected exactly 1 successful close, got %d", successCount)
+		}
+		if errorCount != 9 {
+			t.Fatalf("Expected 9 ErrPoolClosed, got %d", errorCount)
 		}
 	})
 }
